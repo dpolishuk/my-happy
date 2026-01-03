@@ -489,7 +489,7 @@ export async function sessionDelete(sessionId: string): Promise<{ success: boole
         const response = await apiSocket.request(`/v1/sessions/${sessionId}`, {
             method: 'DELETE'
         });
-        
+
         if (response.ok) {
             const result = await response.json();
             return { success: true };
@@ -504,6 +504,26 @@ export async function sessionDelete(sessionId: string): Promise<{ success: boole
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+}
+
+/**
+ * Set the model for a session
+ * Updates both the current session and user preferences for future sessions
+ */
+export async function sessionSetModel(sessionId: string, modelId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+        const response = await apiSocket.sessionRPC<{ success: boolean; message?: string }, { modelId: string }>(
+            sessionId,
+            'setModel',
+            { modelId }
+        );
+        return response;
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : 'Failed to set model'
         };
     }
 }

@@ -4,6 +4,15 @@ import { z } from "zod";
 // Agent states
 //
 
+// Model definition
+export const ModelSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    provider: z.enum(['anthropic', 'openai', 'google', 'other']),
+});
+
+export type Model = z.infer<typeof ModelSchema>;
+
 export const MetadataSchema = z.object({
     path: z.string(),
     host: z.string(),
@@ -19,9 +28,11 @@ export const MetadataSchema = z.object({
     tools: z.array(z.string()).optional(),
     slashCommands: z.array(z.string()).optional(),
     homeDir: z.string().optional(), // User's home directory on the machine
-    happyHomeDir: z.string().optional(), // Happy configuration directory 
+    happyHomeDir: z.string().optional(), // Happy configuration directory
     hostPid: z.number().optional(), // Process ID of the session
-    flavor: z.string().nullish() // Session flavor/variant identifier
+    flavor: z.string().nullish(), // Session flavor/variant identifier
+    availableModels: z.array(ModelSchema).optional(), // Available models from CLI
+    selectedModel: z.string().optional(), // Currently selected model ID
 });
 
 export type Metadata = z.infer<typeof MetadataSchema>;
