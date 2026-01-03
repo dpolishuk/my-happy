@@ -1,26 +1,20 @@
 import * as React from 'react';
-import { View, Text, Pressable, Platform, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, Pressable, Platform, TouchableWithoutFeedback, ActivityIndicator } from 'react-native';
 import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { Typography } from '@/constants/Typography';
 import { hapticsLight } from './haptics';
 import { FloatingOverlay } from './FloatingOverlay';
+import { Image } from 'expo-image';
+import { Octicons } from '@expo/vector-icons';
+import type { Model } from '@/sync/storageTypes';
 
-export interface CommandItem {
-    id: string;
-    label: string;
-    icon?: React.ReactNode;
-}
-
-interface CommandPaletteProps {
+interface ModelSelectorModalProps {
     visible: boolean;
-    title: string;
-    items: CommandItem[];
-    selectedIndex: number;
-    onSelect: (index: number) => void;
+    models: Model[];
+    selectedModelId?: string;
+    onSelect: (modelId: string) => void;
     onClose: () => void;
-    maxHeight?: number;
-    emptyMessage?: string;
-    emptyIcon?: React.ReactNode;
+    isLoading?: boolean;
 }
 
 const stylesheet = StyleSheet.create((theme, runtime) => ({
@@ -51,18 +45,18 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 10,
-        minHeight: 44,
+        paddingVertical: 12,
+        minHeight: 48,
     },
     itemPressed: {
         backgroundColor: theme.colors.surfacePressed,
     },
     itemIcon: {
-        marginRight: 12,
         width: 20,
         height: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        marginRight: 12,
     },
     itemLabel: {
         fontSize: 15,
@@ -109,46 +103,44 @@ const stylesheet = StyleSheet.create((theme, runtime) => ({
         textAlign: 'center',
         ...Typography.default(),
     },
+    loadingContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 32,
+    },
 }));
 
-export const CommandPalette = React.memo<CommandPaletteProps>((props) => {
+// Provider icon mapping
+const getProviderIcon = (provider: Model['provider']): React.ReactNode => {
+    switch (provider) {
+        case 'anthropic':
+            return (
+                <Image
+                    source={require('@/assets/images/icon-claude.png')}
+                    style={{ width: 16, height: 16 }}
+                />
+            );
+        case 'openai':
+            return <Octicons name="cpu" size={16} color="#10a37f" />;
+        case 'google':
+            return <Octicons name="cpu" size={16} color="#4285f4" />;
+        default:
+            return <Octicons name="cpu" size={16} color="gray" />;
+    }
+};
+
+export const ModelSelectorModal = React.memo<ModelSelectorModalProps>((props) => {
     const styles = stylesheet;
     const { theme } = useUnistyles();
 
-    const handleSelect = React.useCallback((index: number) => {
+    const handleSelect = React.useCallback((model: Model) => {
         hapticsLight();
-        props.onSelect(index);
+        props.onSelect(model.id);
     }, [props.onSelect]);
-
-    const handleKeyPress = React.useCallback((event: React.KeyboardEvent) => {
-        if (!props.visible) return;
-
-        if (event.key === 'Escape') {
-            props.onClose();
-        } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            const newIndex = props.selectedIndex > 0 ? props.selectedIndex - 1 : props.items.length - 1;
-            props.onSelect(newIndex);
-        } else if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            const newIndex = (props.selectedIndex + 1) % props.items.length;
-            props.onSelect(newIndex);
-        } else if (event.key === 'Enter' && props.items.length > 0) {
-            event.preventDefault();
-            handleSelect(props.selectedIndex);
-        }
-    }, [props.visible, props.selectedIndex, props.items.length, handleSelect, props.onSelect, props.onClose]);
-
-    React.useEffect(() => {
-        if (props.visible) {
-            document.addEventListener('keydown', handleKeyPress);
-            return () => document.removeEventListener('keydown', handleKeyPress);
-        }
-    }, [props.visible, handleKeyPress]);
 
     if (!props.visible) return null;
 
-    const isEmpty = props.items.length === 0;
+    const isEmpty = props.models.length === 0;
 
     return (
         <>
@@ -157,39 +149,41 @@ export const CommandPalette = React.memo<CommandPaletteProps>((props) => {
             </TouchableWithoutFeedback>
 
             <FloatingOverlay
-                maxHeight={props.maxHeight ?? 280}
+                maxHeight={280}
                 keyboardShouldPersistTaps="always"
             >
                 <View style={styles.container}>
-                    {props.title && (
-                        <Text style={styles.title}>{props.title}</Text>
-                    )}
+                    <Text style={styles.title}>Select Model</Text>
 
-                    {isEmpty ? (
+                    {props.isLoading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="small" color={theme.colors.button.primary.tint} />
+                        </View>
+                    ) : isEmpty ? (
                         <View style={styles.emptyContainer}>
-                            {props.emptyIcon && <View style={styles.emptyIcon}>{props.emptyIcon}</View>}
+                            <View style={styles.emptyIcon}>
+                                <Octicons name="cpu" size={32} color={theme.colors.textSecondary} />
+                            </View>
                             <Text style={styles.emptyText}>
-                                {props.emptyMessage || 'No items available'}
+                                Configure models in CLI
                             </Text>
                         </View>
                     ) : (
-                        props.items.map((item, index) => {
-                            const isSelected = index === props.selectedIndex;
+                        props.models.map((model) => {
+                            const isSelected = model.id === props.selectedModel;
 
                             return (
                                 <Pressable
-                                    key={item.id}
-                                    onPress={() => handleSelect(index)}
+                                    key={model.id}
+                                    onPress={() => handleSelect(model)}
                                     style={({ pressed }) => [
                                         styles.item,
                                         pressed && styles.itemPressed,
                                     ]}
                                 >
-                                    {item.icon && (
-                                        <View style={styles.itemIcon}>
-                                            {item.icon}
-                                        </View>
-                                    )}
+                                    <View style={styles.itemIcon}>
+                                        {getProviderIcon(model.provider)}
+                                    </View>
 
                                     <Text
                                         style={[
@@ -198,17 +192,15 @@ export const CommandPalette = React.memo<CommandPaletteProps>((props) => {
                                         ]}
                                         numberOfLines={1}
                                     >
-                                        {item.label}
+                                        {model.name}
                                     </Text>
 
-                                    {isSelected && (
-                                        <View style={[
-                                            styles.radio,
-                                            isSelected ? styles.radioActive : styles.radioInactive
-                                        ]}>
-                                            {isSelected && <View style={styles.radioDot} />}
-                                        </View>
-                                    )}
+                                    <View style={[
+                                        styles.radio,
+                                        isSelected ? styles.radioActive : styles.radioInactive
+                                    ]}>
+                                        {isSelected && <View style={styles.radioDot} />}
+                                    </View>
                                 </Pressable>
                             );
                         })
@@ -219,4 +211,4 @@ export const CommandPalette = React.memo<CommandPaletteProps>((props) => {
     );
 });
 
-CommandPalette.displayName = 'CommandPalette';
+ModelSelectorModal.displayName = 'ModelSelectorModal';

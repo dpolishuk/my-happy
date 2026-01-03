@@ -20,7 +20,12 @@ import { StyleSheet, useUnistyles } from 'react-native-unistyles';
 import { useSetting } from '@/sync/storage';
 import { Theme } from '@/theme';
 import { t } from '@/text';
-import { Metadata } from '@/sync/storageTypes';
+import { Metadata, Model } from '@/sync/storageTypes';
+import { ModelSelectorModal } from './ModelSelectorModal';
+import { useCommandDetector } from '@/hooks/useCommandDetector';
+import { sessionSetModel } from '@/sync/ops';
+import { storage } from '@/sync/storage';
+import { Modal } from '@/modal';
 
 interface AgentInputProps {
     value: string;
@@ -381,6 +386,43 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
         // Don't close the settings overlay - let users see the change and potentially switch again
     }, [props.onPermissionModeChange]);
 
+    // Model command state
+    const { isActive: isModelCommandActive } = useCommandDetector(props.value, '/model');
+    const [isSettingModel, setIsSettingModel] = React.useState(false);
+
+    // Get available models from metadata
+    const availableModels = props.metadata?.availableModels || [];
+    const selectedModelId = props.metadata?.selectedModel;
+
+    // Handle model selection
+    const handleModelSelect = React.useCallback(async (modelId: string) => {
+        if (!props.sessionId) return;
+
+        setIsSettingModel(true);
+        try {
+            const result = await sessionSetModel(props.sessionId, modelId);
+
+            if (result.success) {
+                // Clear the /model command from input
+                props.onChangeText('');
+            } else {
+                hapticsError();
+                Modal.alert('Error', result.message || 'Failed to set model', [{ text: 'OK', style: 'cancel' }]);
+            }
+        } catch (error) {
+            hapticsError();
+            Modal.alert('Error', 'Failed to set model', [{ text: 'OK', style: 'cancel' }]);
+        } finally {
+            setIsSettingModel(false);
+        }
+    }, [props.sessionId, props]);
+
+    // Handle model palette close
+    const handleModelPaletteClose = React.useCallback(() => {
+        // Just clear the input to close the palette
+        props.onChangeText('');
+    }, [props]);
+
     // Handle abort button press
     const handleAbortPress = React.useCallback(async () => {
         if (!props.onAbort) return;
@@ -605,6 +647,16 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                         </View>
                     </>
                 )}
+
+                {/* Model command modal */}
+                <ModelSelectorModal
+                    visible={isModelCommandActive}
+                    models={availableModels}
+                    selectedModelId={selectedModelId}
+                    onSelect={handleModelSelect}
+                    onClose={handleModelPaletteClose}
+                    isLoading={isSettingModel}
+                />
 
                 {/* Connection status, context warning, and permission mode */}
                 {(props.connectionStatus || contextWarning || props.permissionMode) && (
